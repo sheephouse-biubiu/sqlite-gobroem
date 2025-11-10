@@ -1,11 +1,8 @@
-module sqlite-gobroem
+module github.com/sheephouse-biubiu/sqlite-gobroem
 
 go 1.23.0
 
-require (
-	github.com/glebarez/sqlite v1.11.0
-	github.com/sheephouse-biubiu/sqlite-gobroem v0.0.0-20251110023719-6c0649ef9460
-)
+require github.com/glebarez/sqlite v1.11.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
