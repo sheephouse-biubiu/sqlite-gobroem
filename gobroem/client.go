@@ -8,7 +8,7 @@ import (
 	"reflect"
 
 	// include sqlite
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/sqlite"
 )
 
 const (
@@ -33,7 +33,7 @@ type sqlResult struct {
 }
 
 func newClient(file string) (*sqlClient, error) {
-	db, err := sql.Open("sqlite3", file)
+	db, err := sql.Open("sqlite", file)
 	if err != nil {
 		return nil, err
 	}
