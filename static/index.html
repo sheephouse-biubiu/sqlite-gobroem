@@ -653,6 +653,10 @@
       background: #fff;
     }
 
+    #schema_tools #schema_table_comment {
+      min-width: 320px;
+    }
+
     #schema_tools .schema-textarea {
       min-width: 320px;
       min-height: 64px;
@@ -726,10 +730,56 @@
       background: #fff;
     }
 
-    #index_columns_input {
-      min-width: 250px;
-      height: 78px;
-      padding: 4px 8px;
+    #index_column_picker {
+      min-width: 240px;
+      height: 30px;
+      padding: 0 8px;
+    }
+
+    #index_selected_columns {
+      width: 100%;
+      min-height: 34px;
+      padding: 4px 6px;
+      border: 1px dashed #b8cee4;
+      border-radius: 6px;
+      background: #f6fbff;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    #index_selected_columns .index-selected-empty {
+      font-size: 12px;
+      color: #6d86a2;
+    }
+
+    #index_selected_columns .index-col-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #dff0ff;
+      border: 1px solid #b8d8f5;
+      border-radius: 20px;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: #2a5277;
+      cursor: grab;
+      user-select: none;
+    }
+
+    #index_selected_columns .index-col-chip.dragging {
+      opacity: 0.55;
+    }
+
+    #index_selected_columns .index-col-chip .remove-col {
+      border: none;
+      background: transparent;
+      color: #5b7fa2;
+      line-height: 1;
+      padding: 0;
+      font-size: 14px;
+      cursor: pointer;
     }
 
     #index_tools .index-checkbox {
@@ -747,6 +797,12 @@
 
     #index_edit_hint {
       margin-top: 8px;
+      font-size: 12px;
+      color: #5d7491;
+    }
+
+    #index_columns_hint {
+      margin-top: 6px;
       font-size: 12px;
       color: #5d7491;
     }
@@ -776,6 +832,24 @@
       gap: 6px;
       align-items: center;
       white-space: nowrap;
+    }
+
+    #table_columns .schema-col-comment {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 220px;
+    }
+
+    #table_columns .schema-col-comment .schema-col-comment-input {
+      min-width: 160px;
+      height: 28px;
+      border: 1px solid #b9cfe4;
+      border-radius: 5px;
+      padding: 0 8px;
+      font-size: 12px;
+      color: #244565;
+      background: #fff;
     }
 
     #table_columns .schema-col-actions .btn {
@@ -1085,6 +1159,7 @@
                   <th data-i18n="column_pk">主键</th>
                   <th data-i18n="column_not_null">非空</th>
                   <th data-i18n="column_default">默认值</th>
+                  <th data-i18n="column_comment">注释</th>
                   <th data-i18n="action">操作</th>
                 </tr>
               </thead>
@@ -1123,6 +1198,11 @@
               <button id="schema_rename_table" class="btn btn-warning btn-sm" data-i18n="schema_rename_table">重命名表</button>
             </div>
 
+            <div class="schema-row">
+              <input id="schema_table_comment" class="schema-input" type="text" data-i18n-placeholder="table_comment_placeholder" placeholder="表注释（可选）">
+              <button id="schema_save_table_comment" class="btn btn-default btn-sm" data-i18n="save_table_comment">保存表注释</button>
+            </div>
+
             <div id="schema_sql_preview" data-i18n="schema_sql_preview_empty">等待结构操作...</div>
           </div>
 
@@ -1132,11 +1212,14 @@
               <div class="index-title" data-i18n="index_tools_title">索引操作</div>
               <div class="index-row">
                 <input id="index_name_input" class="index-input" type="text" data-i18n-placeholder="index_name_placeholder" placeholder="索引名">
-                <select id="index_columns_input" class="index-input" multiple size="3" title="按住 Ctrl/Cmd 可多选"></select>
+                <select id="index_column_picker" class="index-input" title="选择字段"></select>
+                <button id="index_add_column_field" class="btn btn-default btn-sm" data-i18n="index_add_column_field">添加字段</button>
                 <label class="index-checkbox"><input id="index_unique_input" type="checkbox"> <span data-i18n="index_unique">唯一</span></label>
                 <button id="index_save_btn" class="btn btn-primary btn-sm" data-i18n="index_add">新增索引</button>
                 <button id="index_cancel_edit_btn" class="btn btn-default btn-sm" data-i18n="cancel" style="display:none;">取消</button>
               </div>
+              <div id="index_selected_columns"></div>
+              <div id="index_columns_hint" data-i18n="index_columns_hint">先从下拉框选字段，再点“添加字段”。</div>
               <div id="index_edit_hint" data-i18n="index_edit_hint_idle">当前为新增模式</div>
             </div>
 

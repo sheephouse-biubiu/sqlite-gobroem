@@ -25,6 +25,7 @@ var queryFavorites = [];
 var queryHistoryRenderItems = [];
 var maxQueryHistory = 20;
 var indexEditTarget = null;
+var indexSelectedColumns = [];
 var i18nText = {
   zh: {
     page_title: 'SQLite 管理台',
@@ -59,6 +60,7 @@ var i18nText = {
     column_pk: '主键',
     column_not_null: '非空',
     column_default: '默认值',
+    column_comment: '注释',
     indexes_info: '索引信息',
     index_name: '索引名',
     index_columns: '字段',
@@ -67,6 +69,10 @@ var i18nText = {
     index_tools_title: '索引操作',
     index_name_placeholder: '索引名',
     index_columns_placeholder: '字段，逗号分隔，例如 key, category',
+    index_columns_hint: '先从下拉框选字段并添加，再拖动已选字段调整顺序。',
+    index_add_column_field: '添加字段',
+    index_select_column_placeholder: '选择字段',
+    index_selected_empty: '尚未选择字段',
     index_add: '新增索引',
     index_update: '保存索引',
     index_edit: '修改',
@@ -172,6 +178,11 @@ var i18nText = {
     schema_auto_increment: '自增',
     schema_target_column: '新字段名',
     schema_new_table_name: '新表名',
+    table_comment_placeholder: '表注释（可选）',
+    save_table_comment: '保存表注释',
+    save_column_comment: '保存注释',
+    comment_saved: '注释已保存。',
+    load_comment_failed: '读取注释失败。',
     schema_select_column: '选择字段',
     schema_confirm_drop_column: '确定删除字段 {{name}} 吗？',
     schema_confirm_rename_table: '确定将表 {{from}} 重命名为 {{to}} 吗？',
@@ -243,6 +254,7 @@ var i18nText = {
     column_pk: 'Primary Key',
     column_not_null: 'Not Null',
     column_default: 'Default',
+    column_comment: 'Comment',
     indexes_info: 'Indexes',
     index_name: 'Name',
     index_columns: 'Columns',
@@ -251,6 +263,10 @@ var i18nText = {
     index_tools_title: 'Index Tools',
     index_name_placeholder: 'Index name',
     index_columns_placeholder: 'Columns, comma-separated, e.g. key, category',
+    index_columns_hint: 'Select and add columns, then drag selected chips to reorder.',
+    index_add_column_field: 'Add Column',
+    index_select_column_placeholder: 'Select column',
+    index_selected_empty: 'No columns selected',
     index_add: 'Add Index',
     index_update: 'Save Index',
     index_edit: 'Edit',
@@ -356,6 +372,11 @@ var i18nText = {
     schema_auto_increment: 'Auto Increment',
     schema_target_column: 'New column name',
     schema_new_table_name: 'New table name',
+    table_comment_placeholder: 'Table comment (optional)',
+    save_table_comment: 'Save Table Comment',
+    save_column_comment: 'Save Comment',
+    comment_saved: 'Comment saved.',
+    load_comment_failed: 'Failed to load comments.',
     schema_select_column: 'Select column',
     schema_confirm_drop_column: 'Drop column {{name}}?',
     schema_confirm_rename_table: 'Rename table {{from}} to {{to}}?',
@@ -474,6 +495,7 @@ function applyI18n() {
   }
   $('#index_save_btn').text(indexEditTarget ? t('index_update') : t('index_add'));
   $('#index_edit_hint').text(indexEditTarget ? tf('index_edit_hint_editing', { name: indexEditTarget.name }) : t('index_edit_hint_idle'));
+  renderIndexSelectedColumns();
   renderQueryHistory();
   populateSchemaColumnSelectors();
 
@@ -732,6 +754,98 @@ function setQueryStatsError(ms) {
   $('#query_result_stats').attr('data-runtime', '1').text(msg);
 }
 
+function ensureCommentMetaTable(cb) {
+  var sql = 'CREATE TABLE IF NOT EXISTS "__gobroem_comments" (' +
+    'table_name TEXT NOT NULL,' +
+    'object_type TEXT NOT NULL,' +
+    'column_name TEXT NOT NULL DEFAULT \'\',' +
+    'comment_text TEXT NOT NULL DEFAULT \'\',' +
+    'PRIMARY KEY (table_name, object_type, column_name)' +
+    ');';
+  executeQuery(sql, function(data) {
+    if (data && data.code === 'error') {
+      cb(false);
+      return;
+    }
+    cb(true);
+  });
+}
+
+function saveCommentMeta(tableName, objectType, columnName, commentText, done) {
+  ensureCommentMetaTable(function(ok) {
+    if (!ok) {
+      done(false, t('query_failed'));
+      return;
+    }
+
+    var safeTable = sqlValueLiteral(tableName || '');
+    var safeType = sqlValueLiteral(objectType || '');
+    var safeColumn = sqlValueLiteral(columnName || '');
+    var safeComment = sqlValueLiteral(commentText || '');
+    var sqls = [
+      'DELETE FROM "__gobroem_comments" WHERE table_name = ' + safeTable + ' AND object_type = ' + safeType + ' AND column_name = ' + safeColumn + ';',
+      'INSERT INTO "__gobroem_comments" (table_name, object_type, column_name, comment_text) VALUES (' + safeTable + ', ' + safeType + ', ' + safeColumn + ', ' + safeComment + ');'
+    ];
+
+    executeSqlSeries(sqls, function(errMsg) {
+      if (errMsg) {
+        done(false, errMsg);
+        return;
+      }
+      done(true);
+    });
+  });
+}
+
+function loadCommentMetaForTable(tableName, done) {
+  ensureCommentMetaTable(function(ok) {
+    if (!ok) {
+      done({ tableComment: '', columnComments: {} });
+      return;
+    }
+
+    var sql = 'SELECT object_type, column_name, comment_text FROM "__gobroem_comments" WHERE table_name = ' + sqlValueLiteral(tableName) + ';';
+    executeQuery(sql, function(data) {
+      var result = { tableComment: '', columnComments: {} };
+      var idxType = -1;
+      var idxCol = -1;
+      var idxComment = -1;
+
+      if (data && data.code === 'error') {
+        done(result);
+        return;
+      }
+      if (!data || !$.isArray(data.columns) || !$.isArray(data.rows)) {
+        done(result);
+        return;
+      }
+
+      idxType = data.columns.indexOf('object_type');
+      idxCol = data.columns.indexOf('column_name');
+      idxComment = data.columns.indexOf('comment_text');
+      if (idxType < 0 || idxCol < 0 || idxComment < 0) {
+        done(result);
+        return;
+      }
+
+      data.rows.forEach(function(row) {
+        var typ = row[idxType];
+        var col = row[idxCol] || '';
+        var txt = row[idxComment] || '';
+        if (typ === 'table') {
+          result.tableComment = txt;
+          return;
+        }
+        if (typ === 'column' && col) {
+          result.columnComments[col] = txt;
+        }
+      });
+
+      done(result);
+    });
+  });
+}
+
 function ensureQueryActionButtonsEnabled() {
   $('#run, #export_csv, #export_json').prop('disabled', false).removeAttr('disabled');
 }
@@ -745,16 +859,39 @@ function parseIndexColumns(raw) {
   });
 }
 
+function renderIndexSelectedColumns() {
+  var $box = $('#index_selected_columns');
+  if (!$box.length) {
+    return;
+  }
+
+  $box.empty();
+  if (!indexSelectedColumns.length) {
+    $('<span class="index-selected-empty"></span>').text(t('index_selected_empty')).appendTo($box);
+    return;
+  }
+
+  indexSelectedColumns.forEach(function(colName, idx) {
+    var $chip = $('<span class="index-col-chip"></span>');
+    $chip.attr('draggable', 'true').attr('data-index', idx);
+    $('<span></span>').text(colName).appendTo($chip);
+    $('<button type="button" class="remove-col" aria-label="remove">×</button>')
+      .attr('data-col', colName)
+      .appendTo($chip);
+    $chip.appendTo($box);
+  });
+}
+
 function populateIndexColumnSelector(schemaRows) {
   var names = [];
   var selected;
-  var $columns = $('#index_columns_input');
+  var $columns = $('#index_column_picker');
 
   if (!$columns.length) {
     return;
   }
 
-  selected = parseIndexColumns($columns.val());
+  selected = $.trim($columns.val() || '');
 
   if ($.isArray(schemaRows)) {
     names = schemaRows.map(function(col) { return col.name; });
@@ -765,13 +902,21 @@ function populateIndexColumnSelector(schemaRows) {
   }
 
   $columns.empty();
+  $('<option></option>').attr('value', '').text(t('index_select_column_placeholder')).appendTo($columns);
   names.forEach(function(name) {
     $('<option></option>').attr('value', name).text(name).appendTo($columns);
   });
 
-  $columns.val(selected.filter(function(name) {
+  if (selected && names.indexOf(selected) >= 0) {
+    $columns.val(selected);
+  } else {
+    $columns.val('');
+  }
+
+  indexSelectedColumns = indexSelectedColumns.filter(function(name) {
     return names.indexOf(name) >= 0;
-  }));
+  });
+  renderIndexSelectedColumns();
 }
 
 function buildCreateIndexSQL(tableName, indexName, columns, unique) {
@@ -782,18 +927,21 @@ function buildCreateIndexSQL(tableName, indexName, columns, unique) {
 
 function resetIndexTools() {
   indexEditTarget = null;
+  indexSelectedColumns = [];
   $('#index_name_input').val('');
-  $('#index_columns_input').val([]);
+  $('#index_column_picker').val('');
   $('#index_unique_input').prop('checked', false);
   $('#index_cancel_edit_btn').hide();
   $('#index_save_btn').text(t('index_add'));
   $('#index_edit_hint').text(t('index_edit_hint_idle'));
+  renderIndexSelectedColumns();
 }
 
 function startIndexEdit(target) {
   indexEditTarget = target;
   $('#index_name_input').val(target.name || '');
-  $('#index_columns_input').val(parseIndexColumns(target.columns || []));
+  indexSelectedColumns = parseIndexColumns(target.columns || []);
+  renderIndexSelectedColumns();
   $('#index_unique_input').prop('checked', !!target.unique);
   $('#index_cancel_edit_btn').show();
   $('#index_save_btn').text(t('index_update'));
@@ -1218,29 +1366,36 @@ buildTableStructure = function(name, cb) {
         return cb();
       }
 
-      $('#table_columns tbody').empty();
-      items.forEach(function(item) {
-        var column, defVal;
-        defVal = item.dflt_value === null ? 'NULL' : item.dflt_value;
-        column = '<tr data-col-name="' + _.escape(item.name) + '" data-col-type="' + _.escape(item.type || '') + '" data-col-notnull="' + (item.notnull ? '1' : '0') + '" data-col-default="' + _.escape(item.dflt_value === null ? '' : String(item.dflt_value)) + '" data-col-pk="' + (item.pk ? '1' : '0') + '">';
-        column += '<th data-column-name="' + _.escape(item.name) + '">' + item.name + '</th>';
-        column += '<th>' + item.type + '</th>';
-        column += '<th>' + (item.pk ? t('yes') : t('no')) + '</th>';
-        column += '<th>' + (item.notnull ? t('yes') : t('no')) + '</th>';
-        column += '<th>' + defVal + '</th>';
-        column += '<th><div class="schema-col-actions">';
-        column += '<button class="btn btn-default btn-xs schema-col-edit" type="button">' + t('schema_inline_edit') + '</button>';
-        column += '<button class="btn btn-primary btn-xs schema-col-save" type="button" style="display:none;">' + t('save') + '</button>';
-        column += '<button class="btn btn-link btn-xs schema-col-cancel" type="button" style="display:none;">' + t('cancel') + '</button>';
-        column += '<button class="btn btn-danger btn-xs schema-col-drop" type="button">' + t('schema_column_action_drop') + '</button>';
-        column += '</div></th>';
-        column += '</tr>';
-        $('#table_columns tbody').append(column);
-      });
-      populateSchemaColumnSelectors(items);
-      populateIndexColumnSelector(items);
+      loadCommentMetaForTable(name, function(commentMeta) {
+        $('#schema_table_comment').val(commentMeta.tableComment || '');
+        $('#table_columns tbody').empty();
+        items.forEach(function(item) {
+          var column, defVal, colComment;
+          defVal = item.dflt_value === null ? 'NULL' : item.dflt_value;
+          colComment = commentMeta.columnComments[item.name] || '';
+          column = '<tr data-col-name="' + _.escape(item.name) + '" data-col-type="' + _.escape(item.type || '') + '" data-col-notnull="' + (item.notnull ? '1' : '0') + '" data-col-default="' + _.escape(item.dflt_value === null ? '' : String(item.dflt_value)) + '" data-col-pk="' + (item.pk ? '1' : '0') + '">';
+          column += '<th data-column-name="' + _.escape(item.name) + '">' + item.name + '</th>';
+          column += '<th>' + item.type + '</th>';
+          column += '<th>' + (item.pk ? t('yes') : t('no')) + '</th>';
+          column += '<th>' + (item.notnull ? t('yes') : t('no')) + '</th>';
+          column += '<th>' + defVal + '</th>';
+          column += '<th><div class="schema-col-comment">';
+          column += '<input type="text" class="schema-col-comment-input" value="' + _.escape(colComment) + '" placeholder="' + _.escape(t('column_comment')) + '">';
+          column += '<button class="btn btn-default btn-xs schema-col-comment-save" type="button">' + t('save_column_comment') + '</button>';
+          column += '</div></th>';
+          column += '<th><div class="schema-col-actions">';
+          column += '<button class="btn btn-default btn-xs schema-col-edit" type="button">' + t('schema_inline_edit') + '</button>';
+          column += '<button class="btn btn-primary btn-xs schema-col-save" type="button" style="display:none;">' + t('save') + '</button>';
+          column += '<button class="btn btn-link btn-xs schema-col-cancel" type="button" style="display:none;">' + t('cancel') + '</button>';
+          column += '<button class="btn btn-danger btn-xs schema-col-drop" type="button">' + t('schema_column_action_drop') + '</button>';
+          column += '</div></th>';
+          column += '</tr>';
+          $('#table_columns tbody').append(column);
+        });
+        populateSchemaColumnSelectors(items);
+        populateIndexColumnSelector(items);
 
-      return getTableIndexes(name, function(indexes) {
+        return getTableIndexes(name, function(indexes) {
         $('#table_indexes tbody').empty();
         resetIndexTools();
         if (indexes && indexes.code === 'error') {
@@ -1274,6 +1429,7 @@ buildTableStructure = function(name, cb) {
           $('#table_indexes tbody').append(column);
         });
         return cb();
+        });
       });
     });
   });
@@ -1937,6 +2093,44 @@ $(function() {
     applySchemaChange(sql, 'schema_rename_table_success', nextName);
   });
 
+  $('#schema_save_table_comment').on('click', function() {
+    var tableName = $.trim($('#tables li.selected').text());
+    var comment = $('#schema_table_comment').val() || '';
+
+    if (!tableName) {
+      alert(t('select_table_first'));
+      return;
+    }
+
+    saveCommentMeta(tableName, 'table', '', comment, function(ok, errMsg) {
+      if (!ok) {
+        alert(errMsg || t('query_failed'));
+        return;
+      }
+      alert(t('comment_saved'));
+    });
+  });
+
+  $('#table_columns').on('click', '.schema-col-comment-save', function() {
+    var tableName = $.trim($('#tables li.selected').text());
+    var $row = $(this).closest('tr');
+    var colName = $.trim($row.attr('data-col-name') || '');
+    var comment = $row.find('.schema-col-comment-input').val() || '';
+
+    if (!tableName || !colName) {
+      alert(t('select_table_first'));
+      return;
+    }
+
+    saveCommentMeta(tableName, 'column', colName, comment, function(ok, errMsg) {
+      if (!ok) {
+        alert(errMsg || t('query_failed'));
+        return;
+      }
+      alert(t('comment_saved'));
+    });
+  });
+
   $('#schema_create_table').on('click', function() {
     var tableNameRaw = window.prompt(t('schema_create_table_name'), '');
     var tableName = $.trim(tableNameRaw);
@@ -1974,10 +2168,92 @@ $(function() {
     resetIndexTools();
   });
 
+  $('#index_add_column_field').on('click', function() {
+    var col = $.trim($('#index_column_picker').val() || '');
+    if (!col) {
+      return;
+    }
+    if (indexSelectedColumns.indexOf(col) < 0) {
+      indexSelectedColumns.push(col);
+      renderIndexSelectedColumns();
+    }
+    $('#index_column_picker').val('');
+  });
+
+  $('#index_selected_columns').on('click', '.remove-col', function() {
+    var col = $.trim($(this).attr('data-col') || '');
+    indexSelectedColumns = indexSelectedColumns.filter(function(item) {
+      return item !== col;
+    });
+    renderIndexSelectedColumns();
+  });
+
+  $('#index_selected_columns').on('dragstart', '.index-col-chip', function(event) {
+    var fromIndex = parseInt($(this).attr('data-index'), 10);
+    var ev = event.originalEvent;
+    if (isNaN(fromIndex) || !ev || !ev.dataTransfer) {
+      return;
+    }
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/plain', String(fromIndex));
+    $(this).addClass('dragging');
+  });
+
+  $('#index_selected_columns').on('dragover', '.index-col-chip, #index_selected_columns', function(event) {
+    event.preventDefault();
+    if (event.originalEvent && event.originalEvent.dataTransfer) {
+      event.originalEvent.dataTransfer.dropEffect = 'move';
+    }
+  });
+
+  $('#index_selected_columns').on('drop', '.index-col-chip, #index_selected_columns', function(event) {
+    var ev = event.originalEvent;
+    var fromIndex, toIndex, moved;
+    var $targetChip;
+
+    event.preventDefault();
+    if (!ev || !ev.dataTransfer) {
+      return;
+    }
+
+    fromIndex = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+    if (isNaN(fromIndex) || fromIndex < 0 || fromIndex >= indexSelectedColumns.length) {
+      return;
+    }
+
+    $targetChip = $(event.target).closest('.index-col-chip');
+    if ($targetChip.length) {
+      toIndex = parseInt($targetChip.attr('data-index'), 10);
+      if (isNaN(toIndex)) {
+        return;
+      }
+    } else {
+      toIndex = indexSelectedColumns.length;
+    }
+
+    moved = indexSelectedColumns.splice(fromIndex, 1)[0];
+    if (fromIndex < toIndex) {
+      toIndex -= 1;
+    }
+    if (toIndex < 0) {
+      toIndex = 0;
+    }
+    if (toIndex > indexSelectedColumns.length) {
+      toIndex = indexSelectedColumns.length;
+    }
+
+    indexSelectedColumns.splice(toIndex, 0, moved);
+    renderIndexSelectedColumns();
+  });
+
+  $('#index_selected_columns').on('dragend', '.index-col-chip', function() {
+    $('#index_selected_columns .index-col-chip').removeClass('dragging');
+  });
+
   $('#index_save_btn').on('click', function() {
     var tableName = $.trim($('#tables li.selected').text());
     var indexName = $.trim($('#index_name_input').val());
-    var columns = parseIndexColumns($('#index_columns_input').val());
+    var columns = indexSelectedColumns.slice();
     var unique = $('#index_unique_input').is(':checked');
     var createSql;
 

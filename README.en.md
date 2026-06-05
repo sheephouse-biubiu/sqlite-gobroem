@@ -1,6 +1,6 @@
 # sqlite-gobroem
 
-[中文文档](README.zh-CN.md)
+[Chinese (简体中文)](README.zh-CN.md)
 
 sqlite-gobroem is a Golang embedded, web-based SQLite database browser.
 

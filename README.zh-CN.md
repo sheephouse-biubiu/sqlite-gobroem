@@ -1,6 +1,6 @@
 # sqlite-gobroem
 
-[English](README.en.md)
+[English Documentation](README.en.md)
 
 sqlite-gobroem 是一个使用 Golang 构建的嵌入式 Web SQLite 数据库浏览器。
 
