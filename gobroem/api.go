@@ -9,12 +9,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
-// API ...
+// API is the HTTP API surface for database browsing.
 type API struct {
 	dbClient *sqlClient
 	dbFile   string
+
+	sessions  map[string]string
+	sessionMu sync.RWMutex
 }
 
 // NewAPI initializes the API controller with a DB file.
@@ -23,7 +27,12 @@ func NewAPI(dbFile string) (*API, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &API{client, dbFile}, nil
+
+	api := &API{dbClient: client, dbFile: dbFile}
+	if err := api.initAuth(); err != nil {
+		return nil, err
+	}
+	return api, nil
 }
 
 // NewAPIFromDB initializes the API controller with a DB.
@@ -32,33 +41,77 @@ func NewAPIFromDB(db *sql.DB) (*API, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &API{client, ""}, nil
+
+	api := &API{dbClient: client, dbFile: ""}
+	if err := api.initAuth(); err != nil {
+		return nil, err
+	}
+	return api, nil
 }
 
-// Handler ...
+// Handler creates the HTTP handler for UI and API routes.
 func (a *API) Handler(browserRoot string, staticRoot string) http.Handler {
 	indexPage, _ := Asset("static/index.html")
-	indexTmpl, _ := template.New("name").Parse(string(indexPage))
+	indexTmpl, _ := template.New("index").Parse(string(indexPage))
 
 	fileServer := http.FileServer(&AssetFS{AssetDir, Asset, "static"})
 	staticHandler := http.StripPrefix(staticRoot, fileServer)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case browserRoot + "api/auth/status":
+			a.authStatus(w, r)
+		case browserRoot + "api/auth/setup":
+			a.setupAdmin(w, r)
+		case browserRoot + "api/auth/login":
+			a.login(w, r)
+		case browserRoot + "api/auth/logout":
+			if !a.requireAuth(w, r) {
+				return
+			}
+			a.logout(w, r)
+		case browserRoot + "api/auth/update":
+			if !a.requireAuth(w, r) {
+				return
+			}
+			a.updateAccount(w, r)
+
 		case browserRoot + "api/info":
+			if !a.requireAuth(w, r) {
+				return
+			}
 			a.Info(w, r)
 		case browserRoot + "api/tables":
+			if !a.requireAuth(w, r) {
+				return
+			}
 			a.Tables(w, r)
 		case browserRoot + "api/table":
+			if !a.requireAuth(w, r) {
+				return
+			}
 			a.Table(w, r)
 		case browserRoot + "api/table/info":
+			if !a.requireAuth(w, r) {
+				return
+			}
 			a.TableInfo(w, r)
 		case browserRoot + "api/table/sql":
+			if !a.requireAuth(w, r) {
+				return
+			}
 			a.TableSQL(w, r)
 		case browserRoot + "api/table/indexes":
+			if !a.requireAuth(w, r) {
+				return
+			}
 			a.TableIndexes(w, r)
 		case browserRoot + "api/query":
+			if !a.requireAuth(w, r) {
+				return
+			}
 			a.Query(w, r)
+
 		case browserRoot:
 			indexTmpl.Execute(w, map[string]string{"root": browserRoot, "static": staticRoot})
 		default:
@@ -72,11 +125,12 @@ func (a *API) Handler(browserRoot string, staticRoot string) http.Handler {
 	})
 }
 
-// Info ...
+// Info returns basic information for the opened database.
 func (a *API) Info(w http.ResponseWriter, req *http.Request) {
 	info, err := a.dbClient.Info()
 	if err != nil {
 		renderError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	filePath, err := filepath.Abs(a.dbFile)
@@ -97,82 +151,82 @@ func (a *API) Info(w http.ResponseWriter, req *http.Request) {
 	renderJSON(w, http.StatusOK, result)
 }
 
-// Tables ...
+// Tables returns all user table names.
 func (a *API) Tables(w http.ResponseWriter, req *http.Request) {
 	tables, err := a.dbClient.Tables()
 	if err != nil {
 		renderError(w, http.StatusInternalServerError, err)
+		return
 	}
 
-	result := map[string]interface{}{
-		"tables": tables,
-	}
-	renderJSON(w, http.StatusOK, result)
+	renderJSON(w, http.StatusOK, map[string]interface{}{"tables": tables})
 }
 
-// Table ...
+// Table returns table schema info.
 func (a *API) Table(w http.ResponseWriter, req *http.Request) {
 	name := req.URL.Query().Get("table")
 	result, err := a.dbClient.Table(name)
 	if err != nil {
 		renderError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	renderJSON(w, http.StatusOK, result.Format())
 }
 
-// TableInfo ...
+// TableInfo returns basic row/index count for one table.
 func (a *API) TableInfo(w http.ResponseWriter, req *http.Request) {
 	name := req.URL.Query().Get("table")
 	result, err := a.dbClient.TableInfo(name)
 	if err != nil {
 		renderError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	data := map[string]interface{}{
 		"row_count":     result.Rows[0][0],
 		"indexes_count": 0,
 	}
-
 	renderJSON(w, http.StatusOK, data)
 }
 
-// TableSQL ...
+// TableSQL returns CREATE TABLE SQL.
 func (a *API) TableSQL(w http.ResponseWriter, req *http.Request) {
 	name := req.URL.Query().Get("table")
 	result, err := a.dbClient.TableSQL(name)
 	if err != nil {
 		renderError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if len(result) == 0 {
+		renderError(w, http.StatusNotFound, errors.New("表不存在"))
+		return
 	}
 
-	data := map[string]interface{}{
-		"sql": result[0],
-	}
-
-	renderJSON(w, http.StatusOK, data)
+	renderJSON(w, http.StatusOK, map[string]interface{}{"sql": result[0]})
 }
 
-// TableIndexes ...
+// TableIndexes returns index metadata for one table.
 func (a *API) TableIndexes(w http.ResponseWriter, req *http.Request) {
 	name := req.URL.Query().Get("table")
 	result, err := a.dbClient.TableIndexes(name)
 	if err != nil {
 		renderError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	renderJSON(w, http.StatusOK, result.Format())
 }
 
-// Query ...
+// Query executes SQL and returns JSON or CSV based on query format.
 func (a *API) Query(w http.ResponseWriter, req *http.Request) {
 	query := strings.TrimSpace(req.FormValue("query"))
-
 	if query == "" {
-		renderError(w, http.StatusBadRequest, errors.New("Query missing"))
+		renderError(w, http.StatusBadRequest, errors.New("缺少 SQL 语句"))
 		return
 	}
 
-	result, err := a.dbClient.QuerySQL(req.FormValue("query"))
+	result, err := a.dbClient.QuerySQL(query)
 	if err != nil {
 		renderError(w, http.StatusInternalServerError, err)
 		return
@@ -183,8 +237,8 @@ func (a *API) Query(w http.ResponseWriter, req *http.Request) {
 		if q["format"][0] == "csv" {
 			renderCSV(w, http.StatusOK, result.CSV())
 			return
-		} else if q["format"][0] == "json" {
-			// Format the returned JSON instead of returning in the Result format
+		}
+		if q["format"][0] == "json" {
 			renderJSON(w, http.StatusOK, result.Format())
 			return
 		}

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/sheephouse-biubiu/sqlite-gobroem"
+	"github.com/sheephouse-biubiu/sqlite-gobroem/gobroem"
 )
 
 const version = "0.1.0"

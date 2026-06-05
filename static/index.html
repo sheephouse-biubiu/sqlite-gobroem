@@ -1,140 +1,1270 @@
 <!DOCTYPE html>
-<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
-<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
-<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
-<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+<html class="no-js">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>sqliteweb</title>
-  <meta name="description" content="">
+  <title data-i18n="page_title">SQLite 管理台</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Language" content="en">
-
-  <!-- Place favicon.ico and apple-touch-icon.png in the root directory -->
+  <meta http-equiv="Content-Language" content="zh-CN">
 
   <link rel="stylesheet" href="{{.static}}css/app.css">
+  <style>
+    :root {
+      --sidebar-width: 260px;
+      --topbar-height: 56px;
+      --content-max-width: 1480px;
+      --bg-canvas: #edf3fa;
+      --bg-panel: #f8fbff;
+      --bg-sidebar: #131d34;
+      --bg-sidebar-soft: #17233e;
+      --text-main: #192238;
+      --text-sub: #63708a;
+      --border-soft: #d4e2f2;
+      --accent: #00a7c7;
+      --accent-strong: #0088ab;
+      --accent-glow: rgba(0, 167, 199, 0.28);
+      --danger: #d74f57;
+      --shadow-soft: 0 14px 34px rgba(7, 33, 74, 0.12);
+      --shadow-panel: 0 20px 46px rgba(6, 30, 70, 0.18);
+    }
+
+    html,
+    body {
+      height: 100%;
+      background:
+        radial-gradient(circle at 90% -20%, rgba(0, 163, 255, 0.22), transparent 42%),
+        radial-gradient(circle at 2% 15%, rgba(0, 173, 181, 0.18), transparent 35%),
+        linear-gradient(180deg, #f7fbff 0%, #edf4fb 45%, #eaf1f8 100%);
+      font-family: "Bahnschrift", "Segoe UI", "Microsoft YaHei", "PingFang SC", "Helvetica Neue", sans-serif;
+      color: var(--text-main);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(30, 89, 150, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(30, 89, 150, 0.05) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.45;
+      z-index: 0;
+    }
+
+    body.no-select,
+    body.no-select * {
+      user-select: none !important;
+    }
+
+    #main {
+      height: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    #navbar {
+      position: fixed;
+      top: 0;
+      left: var(--sidebar-width);
+      right: 0;
+      height: 56px;
+      background: linear-gradient(180deg, rgba(244, 250, 255, 0.93) 0%, rgba(235, 244, 252, 0.92) 100%);
+      box-shadow: inset 0 -1px 0 0 #cfe1f4, 0 3px 16px rgba(23, 61, 108, 0.08);
+      backdrop-filter: blur(5px);
+      z-index: 30;
+    }
+
+    #navbar .col-xs-12.col-sm-12 {
+      display: flex;
+      align-items: stretch;
+      padding-right: 8px;
+    }
+
+    #navbar .nav-main {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+    }
+
+    #navbar .nav-main li {
+      float: none;
+      line-height: 55px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+      transition: background-color .2s ease, color .2s ease, box-shadow .2s ease;
+    }
+
+    #navbar .nav-main li.selected {
+      border-top-width: 3px;
+      border-top-color: #0eb8d8;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px #d3e6f8;
+      color: #0f5f82;
+    }
+
+    .navbar-user {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 8px 0 12px;
+      height: 56px;
+      color: #334460;
+      white-space: nowrap;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .navbar-user label {
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      line-height: 1;
+    }
+
+    .navbar-user #current_user_label,
+    .navbar-user #current_username {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      line-height: 1;
+    }
+
+    .navbar-user .btn {
+      margin-left: 0;
+      height: 28px;
+      line-height: 26px;
+      padding: 0 10px;
+      border-radius: 6px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      border: 1px solid #c7d8ea;
+      background: linear-gradient(180deg, #ffffff 0%, #edf4fb 100%);
+      color: #244564;
+    }
+
+    .navbar-user .btn:hover {
+      border-color: #95c6e5;
+      box-shadow: 0 0 0 2px rgba(15, 170, 214, 0.15);
+    }
+
+    .navbar-user .lang-mode-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 2px;
+      color: var(--text-sub);
+    }
+
+    .navbar-user .density-mode-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 2px;
+      color: var(--text-sub);
+    }
+
+    #lang_mode {
+      width: 120px;
+      height: 28px;
+      padding: 0 4px;
+      font-size: 12px;
+      border: 1px solid #b9cfe4;
+      border-radius: 5px;
+      background: linear-gradient(180deg, #ffffff 0%, #edf5ff 100%);
+      color: #234462;
+    }
+
+    #density_mode {
+      width: 96px;
+      height: 28px;
+      padding: 0 4px;
+      font-size: 12px;
+      border: 1px solid #b9cfe4;
+      border-radius: 5px;
+      background: linear-gradient(180deg, #ffffff 0%, #edf5ff 100%);
+      color: #234462;
+    }
+
+    .table-actions {
+      margin-bottom: 12px;
+    }
+
+    .table-actions .btn {
+      margin-right: 8px;
+    }
+
+    #auth_notice {
+      margin-bottom: 10px;
+      color: var(--text-sub);
+      font-size: 13px;
+    }
+
+    #sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: var(--sidebar-width);
+      background:
+        linear-gradient(180deg, rgba(13, 24, 46, 0.96) 0%, rgba(18, 33, 58, 0.98) 100%),
+        radial-gradient(circle at 5% 0%, rgba(0, 160, 210, 0.25), transparent 40%);
+      box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.10), 4px 0 22px rgba(9, 20, 40, 0.25);
+    }
+
+    #sidebar .tabels-list .wrap .title,
+    #sidebar .information {
+      background: rgba(6, 15, 28, 0.32);
+      backdrop-filter: blur(2px);
+    }
+
+    #sidebar .tabels-list .wrap ul li {
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      transition: background-color .18s ease;
+    }
+
+    #sidebar .tabels-list .wrap ul li.selected {
+      background: linear-gradient(90deg, rgba(0, 168, 212, 0.22), rgba(255, 255, 255, 0.04));
+      border-left-color: #3cd6ff;
+      box-shadow: inset 0 0 0 1px rgba(60, 214, 255, 0.18);
+    }
+
+    #sidebar .tabels-list .wrap .tables-create-panel {
+      margin-top: 50px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(122, 155, 196, 0.2);
+      background: rgba(9, 20, 40, 0.26);
+    }
+
+    #sidebar .tabels-list .wrap .tables-create-panel .btn {
+      width: 100%;
+      font-weight: 700;
+      height: 28px;
+      line-height: 1;
+    }
+
+    #sidebar .tabels-list .wrap ul#tables {
+      padding-top: 0;
+    }
+
+    #content {
+      position: fixed;
+      top: var(--topbar-height);
+      left: var(--sidebar-width);
+      right: 0;
+      bottom: 0;
+      overflow: auto;
+      padding: 14px 16px 20px;
+      background: transparent;
+      animation: viewFadeIn .28s ease;
+    }
+
+    #content > #structure,
+    #content > #query_workspace {
+      max-width: var(--content-max-width);
+      margin: 0 auto 14px;
+    }
+
+    #query_workspace {
+      display: block;
+    }
+
+    #query_splitter {
+      display: none;
+      height: 10px;
+      margin: 4px 0;
+      border-radius: 6px;
+      cursor: row-resize;
+      background: linear-gradient(180deg, rgba(130, 170, 205, 0.35) 0%, rgba(122, 164, 201, 0.18) 100%);
+      border: 1px solid rgba(128, 168, 203, 0.4);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+
+    #query_splitter::before {
+      content: "";
+      display: block;
+      width: 54px;
+      height: 2px;
+      margin: 3px auto 0;
+      border-radius: 2px;
+      background: rgba(57, 112, 160, 0.55);
+    }
+
+    #content.query-mode {
+      overflow: hidden;
+    }
+
+    #content.query-mode #query_workspace {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      margin: 0 auto;
+    }
+
+    #content.query-mode #input,
+    #content.query-mode #output {
+      width: 100%;
+    }
+
+    #content.query-mode #input .wrapper,
+    #content.query-mode #output .wrapper {
+      height: 100%;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #content.query-mode #input .actions {
+      margin-top: 10px;
+      flex-shrink: 0;
+      opacity: 1 !important;
+      filter: none !important;
+      position: relative;
+      z-index: 2;
+      padding: 8px;
+      border: 1px solid #d5e4f3;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #f8fcff 0%, #f1f8ff 100%);
+    }
+
+    #query_primary_action {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid #d3e2f1;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #f8fcff 0%, #eef6ff 100%);
+    }
+
+    #run_primary {
+      min-width: 150px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      box-shadow: 0 8px 20px rgba(0, 167, 199, 0.28);
+    }
+
+    #query_primary_action .meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      margin-left: auto;
+    }
+
+    #content.query-mode #editor {
+      flex: 1 1 auto;
+      min-height: 120px;
+    }
+
+    #content.query-mode #output .wrapper {
+      overflow: auto;
+    }
+
+    #content .wrapper,
+    #structure .sql {
+      background: linear-gradient(180deg, rgba(249, 253, 255, 0.95) 0%, rgba(243, 249, 255, 0.94) 100%);
+      border: 1px solid #cfe0f2;
+      border-radius: 10px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    #structure .sql {
+      margin: 0;
+      padding: 4px 0 12px;
+    }
+
+    #structure .sql h3 {
+      color: #0d4f73;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      margin-top: 14px;
+      margin-bottom: 10px;
+      padding-left: 10px;
+      border-left: 3px solid #17c0e6;
+    }
+
+    #structure pre {
+      background: linear-gradient(180deg, #f6faff 0%, #eff6ff 100%);
+      border: 1px solid #d8e5f3;
+      border-radius: 7px;
+      color: #23324c;
+      box-shadow: inset 0 1px 0 #fff;
+    }
+
+    #input .wrapper,
+    #output .wrapper {
+      margin: 0;
+      padding: 10px;
+    }
+
+    #output .wrapper {
+      overflow-x: auto;
+    }
+
+    #table_results {
+      min-width: 980px;
+      margin-bottom: 0;
+    }
+
+    #result_empty {
+      display: none;
+      margin: 12px 0 2px;
+      padding: 20px 18px;
+      border: 1px dashed #b9d0e7;
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(239, 248, 255, 0.95) 0%, rgba(230, 242, 253, 0.92) 100%);
+      color: #335173;
+      text-align: center;
+    }
+
+    #result_empty .title {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .2px;
+      margin-bottom: 4px;
+    }
+
+    #result_empty .desc {
+      font-size: 12px;
+      color: #5b7190;
+    }
+
+    #run.btn-primary,
+    #save_account.btn-primary,
+    #btn_auth_submit.btn-primary,
+    .row-save.btn-primary,
+    .row-save-new.btn-primary {
+      background: linear-gradient(180deg, #21c4e6 0%, var(--accent) 100%);
+      border-color: var(--accent-strong);
+      border-radius: 6px;
+      font-weight: 700;
+      box-shadow: 0 6px 18px var(--accent-glow);
+    }
+
+    #run.btn-primary {
+      min-width: 132px;
+      font-size: 13px;
+      letter-spacing: 0.4px;
+      box-shadow: 0 8px 22px rgba(0, 167, 199, 0.35);
+    }
+
+    #run.btn-primary:hover,
+    #save_account.btn-primary:hover,
+    #btn_auth_submit.btn-primary:hover,
+    .row-save.btn-primary:hover,
+    .row-save-new.btn-primary:hover {
+      background: linear-gradient(180deg, #1ab7dc 0%, #007da0 100%);
+      border-color: #006b87;
+    }
+
+    #btn_logout.btn-danger,
+    .row-delete.btn-danger {
+      background: linear-gradient(180deg, #e46b73 0%, var(--danger) 100%);
+      border-color: #c04148;
+      box-shadow: 0 4px 12px rgba(215, 79, 87, 0.22);
+    }
+
+    .table.table-striped th {
+      background: linear-gradient(180deg, #e8f3ff 0%, #deecfb 100%);
+      color: #1e4664;
+      border-top: 1px solid #c8daee;
+      letter-spacing: 0.2px;
+    }
+
+    .table.table-striped td {
+      color: #2b3347;
+    }
+
+    #editor {
+      border: 1px solid #c8dcf0;
+      border-radius: 8px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 2px rgba(31, 143, 196, 0.08);
+    }
+
+    .modal-content {
+      border: 1px solid #c8d9ec;
+      border-radius: 12px;
+      box-shadow: var(--shadow-panel);
+      overflow: hidden;
+    }
+
+    #auth_modal .modal-header {
+      background:
+        linear-gradient(130deg, #0e4a8a 0%, #017fa8 45%, #0bc2dc 100%);
+      color: #fff;
+      border-bottom: none;
+      padding: 18px 22px 12px;
+      position: relative;
+    }
+
+    #auth_modal .modal-header::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(115deg, transparent 15%, rgba(255, 255, 255, 0.18) 38%, transparent 56%);
+      pointer-events: none;
+    }
+
+    #auth_modal .modal-title {
+      font-size: 23px;
+      font-weight: 900;
+      letter-spacing: .8px;
+      text-shadow: 0 1px 2px rgba(12, 30, 50, 0.25);
+    }
+
+    #auth_modal .modal-body {
+      background:
+        linear-gradient(180deg, #f7fcff 0%, #eef7ff 100%),
+        repeating-linear-gradient(90deg, rgba(28, 108, 176, 0.05), rgba(28, 108, 176, 0.05) 1px, transparent 1px, transparent 18px);
+      padding: 18px 22px 8px;
+    }
+
+    #auth_modal .form-group label,
+    #account_modal .form-group label {
+      font-weight: 700;
+      color: #2e3950;
+      margin-bottom: 6px;
+      letter-spacing: 0.2px;
+    }
+
+    #auth_modal .form-control,
+    #account_modal .form-control {
+      height: 36px;
+      border-radius: 7px;
+      border: 1px solid #cfd9e6;
+      box-shadow: inset 0 1px 1px rgba(12, 33, 52, 0.03);
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    #auth_modal .form-control:focus,
+    #account_modal .form-control:focus {
+      border-color: #25b5d8;
+      box-shadow: 0 0 0 2px rgba(24, 162, 208, 0.2);
+    }
+
+    #auth_modal .modal-footer,
+    #account_modal .modal-footer {
+      background: #f5f8fc;
+      border-top: 1px solid #e1e8f0;
+    }
+
+    #account_modal .modal-header {
+      background: linear-gradient(180deg, #eaf5ff 0%, #dceefe 100%);
+      border-bottom: 1px solid #c6daef;
+    }
+
+    #account_modal .modal-title {
+      color: #2d3a54;
+      font-weight: 800;
+    }
+
+    .table-actions .btn,
+    #input .actions .btn {
+      border-radius: 6px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    #input .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #content.query-mode #input .actions #run {
+      display: none;
+    }
+
+    #query_history {
+      min-width: 260px;
+      max-width: 420px;
+      height: 32px;
+      border-radius: 6px;
+      border: 1px solid #b9cfe4;
+      background: linear-gradient(180deg, #ffffff 0%, #edf5ff 100%);
+      color: #234462;
+      font-size: 12px;
+      padding: 0 8px;
+    }
+
+    #query_shortcut_hint {
+      margin-left: 0;
+      font-size: 12px;
+      color: #5d7491;
+      white-space: nowrap;
+      letter-spacing: 0.1px;
+    }
+
+    #query_result_stats {
+      font-size: 12px;
+      color: #365879;
+      padding: 0 6px;
+      white-space: nowrap;
+    }
+
+
+    #schema_tools {
+      margin: 10px 10px 14px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #c3d9ee;
+      background: linear-gradient(180deg, #f7fbff 0%, #edf5ff 100%);
+    }
+
+    #schema_tools .schema-title {
+      font-weight: 800;
+      color: #1f5278;
+      margin-bottom: 8px;
+      letter-spacing: 0.2px;
+    }
+
+    #schema_tools .schema-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    #schema_tools .schema-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    #schema_tools .schema-input {
+      min-width: 160px;
+      height: 30px;
+      border-radius: 6px;
+      border: 1px solid #b9cfe4;
+      padding: 0 8px;
+      font-size: 12px;
+      color: #244565;
+      background: #fff;
+    }
+
+    #schema_tools .schema-textarea {
+      min-width: 320px;
+      min-height: 64px;
+      border-radius: 6px;
+      border: 1px solid #b9cfe4;
+      padding: 6px 8px;
+      font-size: 12px;
+      color: #244565;
+      background: #fff;
+      resize: vertical;
+    }
+
+    #schema_tools .schema-checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #2f5678;
+      margin: 0;
+      height: 30px;
+      padding: 0 2px;
+      white-space: nowrap;
+      line-height: 1;
+    }
+
+    #schema_tools .schema-checkbox input[type="checkbox"],
+    #index_tools .index-checkbox input[type="checkbox"] {
+      margin: 0;
+      vertical-align: middle;
+      position: relative;
+      top: 0;
+    }
+
+    #schema_tools .schema-checkbox span,
+    #index_tools .index-checkbox span {
+      display: inline-flex;
+      align-items: center;
+      line-height: 1;
+    }
+
+    #index_tools {
+      margin: 10px 10px 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #c3d9ee;
+      background: linear-gradient(180deg, #f8fcff 0%, #eef6ff 100%);
+    }
+
+    #index_tools .index-title {
+      font-weight: 800;
+      color: #1f5278;
+      margin-bottom: 8px;
+      letter-spacing: 0.2px;
+    }
+
+    #index_tools .index-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    #index_tools .index-input {
+      min-width: 180px;
+      height: 30px;
+      border-radius: 6px;
+      border: 1px solid #b9cfe4;
+      padding: 0 8px;
+      font-size: 12px;
+      color: #244565;
+      background: #fff;
+    }
+
+    #index_columns_input {
+      min-width: 250px;
+      height: 78px;
+      padding: 4px 8px;
+    }
+
+    #index_tools .index-checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 30px;
+      margin: 0;
+      padding: 0 2px;
+      white-space: nowrap;
+      font-size: 12px;
+      color: #2f5678;
+      line-height: 1;
+    }
+
+    #index_edit_hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #5d7491;
+    }
+
+    #schema_tools .schema-sep {
+      width: 100%;
+      border-top: 1px dashed #c9dbec;
+      margin: 4px 0;
+    }
+
+    #schema_sql_preview {
+      margin-top: 8px;
+      padding: 8px;
+      border: 1px dashed #b8cee4;
+      border-radius: 6px;
+      background: #f6fbff;
+      color: #2a4967;
+      font-size: 12px;
+      max-height: 170px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #table_columns .schema-col-actions {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      white-space: nowrap;
+    }
+
+    #table_columns .schema-col-actions .btn {
+      min-width: 58px;
+    }
+
+    body.compact-mode #table_columns .schema-col-actions .btn {
+      min-width: 52px;
+      padding: 2px 6px;
+      font-size: 11px;
+    }
+
+    @keyframes viewFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+        filter: blur(1px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+      }
+    }
+
+    @media (max-width: 980px) {
+      #query_primary_action {
+        display: none;
+      }
+
+      #content.query-mode #input .actions #run {
+        display: inline-block;
+      }
+
+      #navbar {
+        position: relative;
+        left: auto;
+        right: auto;
+        top: auto;
+        height: auto;
+      }
+
+      #navbar .col-xs-12.col-sm-12 {
+        flex-direction: column;
+        align-items: stretch;
+        padding-right: 0;
+      }
+
+      #navbar .nav-main {
+        flex-wrap: wrap;
+      }
+
+      .navbar-user {
+        justify-content: flex-end;
+        padding: 6px 10px 8px;
+        margin: 0;
+        height: auto;
+      }
+
+      #sidebar {
+        position: relative;
+        width: 100%;
+        height: 300px;
+        top: auto;
+        bottom: auto;
+      }
+
+      #content {
+        position: relative;
+        top: auto;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        overflow: visible;
+        padding: 10px;
+      }
+
+      #input .wrapper,
+      #output .wrapper,
+      #structure .sql {
+        margin: 0;
+      }
+
+      #content > #structure,
+      #content > #query_workspace {
+        max-width: none;
+        margin: 0 0 10px;
+      }
+
+      #content.query-mode {
+        overflow: visible;
+      }
+
+      #content.query-mode #query_workspace {
+        height: auto;
+        display: block;
+      }
+
+      #content.query-mode #input,
+      #content.query-mode #output {
+        height: auto !important;
+      }
+
+      #query_splitter {
+        display: none !important;
+      }
+    }
+
+    body.compact-mode {
+      --topbar-height: 50px;
+      --sidebar-width: 244px;
+    }
+
+    body.compact-mode #navbar .nav-main li {
+      line-height: 49px;
+      font-size: 13px;
+      padding-left: 11px;
+      padding-right: 11px;
+    }
+
+    body.compact-mode .navbar-user {
+      gap: 6px;
+      height: 44px;
+      font-size: 11px;
+    }
+
+    body.compact-mode #lang_mode,
+    body.compact-mode #density_mode {
+      height: 22px;
+      font-size: 11px;
+    }
+
+    body.compact-mode #sidebar .tabels-list {
+      bottom: 188px;
+    }
+
+    body.compact-mode #sidebar .information {
+      height: 188px;
+    }
+
+    body.compact-mode #sidebar .information .wrap {
+      font-size: 12px;
+    }
+
+    body.compact-mode #content {
+      padding: 8px 10px 12px;
+    }
+
+    body.compact-mode #content > #structure,
+    body.compact-mode #content > #query_workspace {
+      margin-bottom: 8px;
+    }
+
+    body.compact-mode #structure .sql h3 {
+      margin-top: 10px;
+      margin-bottom: 7px;
+      font-size: 22px;
+    }
+
+    body.compact-mode #input .wrapper,
+    body.compact-mode #output .wrapper {
+      padding: 7px;
+    }
+
+    body.compact-mode #result_empty {
+      margin-top: 8px;
+      padding: 14px 12px;
+    }
+
+    body.compact-mode #result_empty .title {
+      font-size: 13px;
+    }
+
+    body.compact-mode #result_empty .desc {
+      font-size: 11px;
+    }
+
+    body.compact-mode .table-actions {
+      margin-bottom: 8px;
+    }
+
+    body.compact-mode #query_history {
+      height: 28px;
+      min-width: 220px;
+      font-size: 11px;
+    }
+
+    body.compact-mode #query_shortcut_hint {
+      font-size: 11px;
+    }
+
+    body.compact-mode #query_result_stats {
+      font-size: 11px;
+    }
+
+
+    body.compact-mode #schema_tools {
+      padding: 8px;
+      margin: 8px 10px 12px;
+    }
+
+    body.compact-mode #schema_tools .schema-title {
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    body.compact-mode #index_tools {
+      padding: 8px;
+      margin: 8px 10px;
+    }
+
+    body.compact-mode #index_tools .index-title,
+    body.compact-mode #index_edit_hint {
+      font-size: 11px;
+    }
+
+    body.compact-mode .table.table-striped th,
+    body.compact-mode .table.table-striped td {
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    body.compact-mode #editor {
+      height: 230px !important;
+    }
+  </style>
   <script>const apiRoot = "{{.root}}"</script>
 </head>
 <body>
-   <!--[if lt IE 7]>
-       <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
-   <![endif]-->
-
-  <div id="main">
+  <div id="main" style="display:none;">
     <div id="navbar">
       <div class="row">
         <div class="col-xs-12 col-sm-12">
           <ul class="nav-main">
-            <li id="table_structure">Structure</li>
-            <li id="table_content">Content</li>
-            <li id="table_query">SQL Query</li>
+            <li id="table_structure" data-i18n="tab_structure">表结构</li>
+            <li id="table_content" data-i18n="tab_content">表数据</li>
+            <li id="table_query" data-i18n="tab_query">SQL 查询</li>
           </ul>
+
+          <div class="navbar-user">
+            <span id="current_user_label" data-i18n="current_user_label">当前用户：</span><strong id="current_username">-</strong>
+            <span class="lang-mode-wrap">
+              <label id="lang_mode_label" for="lang_mode" data-i18n="language_mode_label">语言</label>
+              <select id="lang_mode" class="form-control input-sm">
+                <option value="auto">跟随系统</option>
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+              </select>
+            </span>
+            <span class="density-mode-wrap">
+              <label id="density_mode_label" for="density_mode" data-i18n="density_mode_label">密度</label>
+              <select id="density_mode" class="form-control input-sm">
+                <option value="standard">标准</option>
+                <option value="compact">紧凑</option>
+              </select>
+            </span>
+            <button id="btn_account" class="btn btn-default btn-xs" data-i18n="account_settings">修改密码</button>
+            <button id="btn_logout" class="btn btn-danger btn-xs" data-i18n="logout">退出登录</button>
+          </div>
         </div>
       </div>
-
     </div>
 
     <div id="sidebar">
       <div class="tabels-list">
         <div class="wrap">
-          <div class="title">Database Tables</div>
+          <div class="title" data-i18n="tables_list">数据表列表</div>
+          <div class="tables-create-panel">
+            <button id="schema_create_table" class="btn btn-success btn-xs" data-i18n="schema_create_table">创建数据表</button>
+          </div>
           <ul id="tables"></ul>
         </div>
       </div>
 
       <div class="information">
         <div class="wrap">
-          <div id="db_information" class="title">Database Information</div>
+          <div id="db_information" class="title" data-i18n="db_info">数据库信息</div>
           <ul>
-            <li>Filename: <span id="db_file_name"></span></li>
-            <li>Size: <span id="db_size"></span></li>
-            <li>Tables: <span id="db_count_tables"></span></li>
-            <li>Indexes: <span id="db_count_indexes"></span></li>
+            <li><span data-i18n="filename">文件名：</span><span id="db_file_name"></span></li>
+            <li><span data-i18n="size">大小：</span><span id="db_size"></span></li>
+            <li><span data-i18n="table_count">表数量：</span><span id="db_count_tables"></span></li>
+            <li><span data-i18n="index_count">索引数量：</span><span id="db_count_indexes"></span></li>
           </ul>
-          <div id="table_information" class="title">Table Information</div>
+          <div id="table_information" class="title" data-i18n="current_table_info">当前表信息</div>
           <ul>
-            <li>Rows: <span id="table_count_rows"></span></li>
+            <li><span data-i18n="rows_count">行数：</span><span id="table_count_rows"></span></li>
           </ul>
         </div>
       </div>
     </div>
 
     <div id="content">
-        <div id="structure">
-          <div class="sql">
-            <h3>SQL</h3>
-            <div>
-              <pre id="structure_sql"></pre>
-            </div>
-            <h3>Columns</h3>
-            <div id="structure_columns">
-              <table id="table_columns" class="table table-striped">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Primary Key</th>
-                    <th>Not Null</th>
-                    <th>Default</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <h3>Indexes</h3>
-            <div id="structure_indexes">
-              <table id="table_indexes" class="table table-striped">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Columns</th>
-                    <th>Unique</th>
-                    <th>SQL</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
+      <div id="structure">
+        <div class="sql">
+          <h3 data-i18n="create_table_sql">建表 SQL</h3>
+          <div>
+            <pre id="structure_sql"></pre>
+          </div>
 
-              <div class="modal fade" id="index_sql_modal" tabindex="-1" role="dialog" aria-labelledby="indexSqlLabel" aria-hidden="true">
-                <div class="modal-dialog">
-                  <div class="modal-content">
-                    <div class="modal-header">
-                      <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-                      <h4 class="modal-title">Modal title</h4>
-                    </div>
-                    <div class="modal-body">
-                      <pre></pre>
-                    </div>
+          <h3 data-i18n="columns_info">字段信息</h3>
+          <div id="structure_columns">
+            <table id="table_columns" class="table table-striped">
+              <thead>
+                <tr>
+                  <th data-i18n="column_name">字段名</th>
+                  <th data-i18n="column_type">类型</th>
+                  <th data-i18n="column_pk">主键</th>
+                  <th data-i18n="column_not_null">非空</th>
+                  <th data-i18n="column_default">默认值</th>
+                  <th data-i18n="action">操作</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div id="schema_tools">
+            <div class="schema-title"><span data-i18n="schema_tools_title">表结构修改</span> · <span id="schema_current_table">-</span></div>
+
+            <div class="schema-row">
+              <input id="schema_add_name" class="schema-input" type="text" data-i18n-placeholder="schema_column_name" placeholder="新字段名">
+              <select id="schema_add_type" class="schema-input">
+                <option value="TEXT" data-i18n="schema_type_text">文本 TEXT</option>
+                <option value="INTEGER" data-i18n="schema_type_integer">整数 INTEGER</option>
+                <option value="REAL" data-i18n="schema_type_real">浮点 REAL</option>
+                <option value="NUMERIC" data-i18n="schema_type_numeric">数值 NUMERIC</option>
+                <option value="BLOB" data-i18n="schema_type_blob">二进制 BLOB</option>
+                <option value="DATETIME" data-i18n="schema_type_datetime">日期时间 DATETIME</option>
+                <option value="DATE" data-i18n="schema_type_date">日期 DATE</option>
+                <option value="BOOLEAN" data-i18n="schema_type_boolean">布尔 BOOLEAN</option>
+                <option value="__custom__" data-i18n="schema_type_custom">自定义</option>
+              </select>
+              <input id="schema_add_type_custom" class="schema-input" type="text" data-i18n-placeholder="schema_custom_type_placeholder" placeholder="自定义类型" style="display:none; min-width: 120px;">
+              <input id="schema_add_default" class="schema-input" type="text" data-i18n-placeholder="schema_default_optional" placeholder="默认值（可选）">
+              <label class="schema-checkbox"><input id="schema_add_not_null" type="checkbox"> <span data-i18n="schema_not_null">非空</span></label>
+              <label class="schema-checkbox"><input id="schema_add_pk" type="checkbox"> <span data-i18n="schema_primary_key">主键</span></label>
+              <label class="schema-checkbox"><input id="schema_add_ai" type="checkbox"> <span data-i18n="schema_auto_increment">自增</span></label>
+              <button id="schema_add_column" class="btn btn-primary btn-sm" data-i18n="schema_add_column">新增字段</button>
+            </div>
+
+            <div class="schema-sep"></div>
+
+            <div class="schema-row">
+              <input id="schema_rename_table_to" class="schema-input" type="text" data-i18n-placeholder="schema_new_table_name" placeholder="新表名">
+              <button id="schema_rename_table" class="btn btn-warning btn-sm" data-i18n="schema_rename_table">重命名表</button>
+            </div>
+
+            <div id="schema_sql_preview" data-i18n="schema_sql_preview_empty">等待结构操作...</div>
+          </div>
+
+          <h3 data-i18n="indexes_info">索引信息</h3>
+          <div id="structure_indexes">
+            <div id="index_tools">
+              <div class="index-title" data-i18n="index_tools_title">索引操作</div>
+              <div class="index-row">
+                <input id="index_name_input" class="index-input" type="text" data-i18n-placeholder="index_name_placeholder" placeholder="索引名">
+                <select id="index_columns_input" class="index-input" multiple size="3" title="按住 Ctrl/Cmd 可多选"></select>
+                <label class="index-checkbox"><input id="index_unique_input" type="checkbox"> <span data-i18n="index_unique">唯一</span></label>
+                <button id="index_save_btn" class="btn btn-primary btn-sm" data-i18n="index_add">新增索引</button>
+                <button id="index_cancel_edit_btn" class="btn btn-default btn-sm" data-i18n="cancel" style="display:none;">取消</button>
+              </div>
+              <div id="index_edit_hint" data-i18n="index_edit_hint_idle">当前为新增模式</div>
+            </div>
+
+            <table id="table_indexes" class="table table-striped">
+              <thead>
+                <tr>
+                  <th data-i18n="index_name">索引名</th>
+                  <th data-i18n="index_columns">字段</th>
+                  <th data-i18n="index_unique">唯一</th>
+                  <th>SQL</th>
+                  <th data-i18n="action">操作</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="modal fade" id="index_sql_modal" tabindex="-1" role="dialog" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                    <h4 class="modal-title" data-i18n="index_sql_title">索引 SQL</h4>
+                  </div>
+                  <div class="modal-body">
+                    <pre></pre>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      <div id="query_workspace">
+        <div id="input">
+          <div class="wrapper">
+            <div id="query_primary_action">
+              <button id="run_primary" class="btn btn-primary" data-i18n="run_sql_primary">执行</button>
+              <div class="meta">
+                <span id="query_result_stats" data-i18n="query_stats_idle">等待执行</span>
+                <span id="query_shortcut_hint" data-i18n="query_shortcut_hint">快捷执行：Ctrl/Cmd + Enter</span>
+              </div>
+            </div>
+            <div id="editor"></div>
+            <div class="actions">
+              <button id="run" class="btn btn-primary" data-i18n="run_sql">执行 SQL（Ctrl/Cmd+Enter）</button>
+              <button id="export_csv" class="btn" data-i18n="export_csv">导出 CSV</button>
+              <button id="export_json" class="btn" data-i18n="export_json">导出 JSON</button>
+              <button id="reset_query_layout" class="btn btn-default" data-i18n="reset_query_layout">重置布局</button>
+              <button id="favorite_query" class="btn btn-default" data-i18n="favorite_query">收藏当前 SQL</button>
+              <button id="clear_query_history" class="btn btn-default" data-i18n="clear_query_history">清空历史</button>
+              <select id="query_history" class="form-control input-sm" title="SQL 历史">
+                <option value="" data-i18n="query_history_placeholder">历史 SQL（选择回填）</option>
+              </select>
             </div>
           </div>
         </div>
 
-        <div id="input">
-            <div class="wrapper">
-              <div id="editor"></div>
-              <div class="actions">
-                <button id="run" class="btn btn-primary">Run</button>
-                <button id="export_csv" class="btn">Export CSV</button>
-                <button id="export_json" class="btn">Export JSON</button>
-              </div>
-            </div>
-        </div>
+        <div id="query_splitter" title="拖拽调整查询区和结果区高度"></div>
 
         <div id="output">
           <div class="wrapper">
+            <div class="table-actions">
+              <button id="add_row" class="btn btn-success btn-sm" data-i18n="add_row">新增一行</button>
+              <button id="refresh_rows" class="btn btn-default btn-sm" data-i18n="refresh_data">刷新数据</button>
+            </div>
             <table id="table_results" class="table table-striped"></table>
+            <div id="result_empty">
+              <div class="title" data-i18n="query_empty_title">结果区为空</div>
+              <div class="desc" data-i18n="query_empty_desc">输入 SQL 后点击执行，结果会显示在这里</div>
+            </div>
           </div>
         </div>
+      </div>
     </div>
   </div>
 
-  <div id="connection_dialog">
+  <div class="modal fade" id="auth_modal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title" id="auth_title" data-i18n="login">登录</h4>
+        </div>
+        <div class="modal-body">
+          <div id="auth_notice"></div>
+          <div class="form-group">
+            <label for="auth_username" data-i18n="username">用户名</label>
+            <input type="text" class="form-control" id="auth_username" data-i18n-placeholder="username_placeholder" placeholder="请输入用户名">
+          </div>
+          <div class="form-group">
+            <label for="auth_password" data-i18n="password">密码</label>
+            <input type="password" class="form-control" id="auth_password" data-i18n-placeholder="password_placeholder" placeholder="请输入密码">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn_auth_submit" type="button" class="btn btn-primary" data-i18n="login">登录</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
+  <div class="modal fade" id="account_modal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+          <h4 class="modal-title" data-i18n="account_settings">修改密码</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="current_password" data-i18n="current_password_label">当前密码</label>
+            <input type="password" class="form-control" id="current_password" data-i18n-placeholder="current_password_placeholder" placeholder="用于确认身份">
+          </div>
+          <div class="form-group">
+            <label for="new_password" data-i18n="new_password_label">新密码</label>
+            <input type="password" class="form-control" id="new_password" data-i18n-placeholder="password_placeholder" placeholder="请输入密码">
+          </div>
+          <div class="form-group">
+            <label for="confirm_password" data-i18n="confirm_new_password">确认新密码</label>
+            <input type="password" class="form-control" id="confirm_password" data-i18n-placeholder="confirm_password_placeholder" placeholder="仅修改密码时填写">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal" data-i18n="cancel">取消</button>
+          <button id="save_account" type="button" class="btn btn-primary" data-i18n="save_account_info">修改密码</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="{{.static}}vendor/ace/ace.js"></script>

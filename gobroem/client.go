@@ -13,7 +13,7 @@ import (
 
 const (
 	queryInfo         = `SELECT * FROM (SELECT COUNT (*) AS count FROM sqlite_master WHERE type='table') AS count_tables, (SELECT COUNT (*) AS count FROM sqlite_master WHERE type='index') AS count_indexes;`
-	queryTables       = `SELECT name FROM sqlite_master WHERE type='table';`
+	queryTables       = `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> 'app_users';`
 	queryTableSchema  = `PRAGMA table_info(%s);`
 	queryTableInfo    = `SELECT COUNT(*) FROM %s;`
 	queryTableSQL     = `SELECT sql FROM sqlite_master WHERE type='table' AND name='%s'`

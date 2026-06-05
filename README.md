@@ -43,6 +43,26 @@ $ ./sqlite-gobroem
 
 Open browser http://localhost:8000/
 
+## Windows Build
+
+To embed files from `static/` into `gobroem/assets.go` and compile on Windows:
+
+```powershell
+./build_windows.ps1
+```
+
+Or use cmd:
+
+```bat
+build_windows.bat
+```
+
+The script will:
+
+1. Ensure `go-bindata` exists (install it automatically if missing)
+2. Regenerate `gobroem/assets.go` from `static/...`
+3. Run `go build .`
+
 ## Embedded
 
 Initialize the API controller:

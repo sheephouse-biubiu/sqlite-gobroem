@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Go: Debug sqlite-gobroem",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}",
+      "args": []
+    },
+    {
+      "name": "Go: Debug sqlite-gobroem (custom db)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-db",
+        "test/test.db",
+        "-bind",
+        "localhost",
+        "-listen",
+        "8000"
+      ]
+    }
+  ]
+}
