@@ -49,6 +49,33 @@ func NewAPIFromDB(db *sql.DB) (*API, error) {
 	return api, nil
 }
 
+// Create User
+func (a *API) CreateUser(username, password string) error {
+	count, err := a.usersCount()
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("用户已存在")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" || password == "" {
+		return errors.New("用户名和密码不能为空")
+	}
+
+	hash, err := hashPassword(password)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.dbClient.Exec(`INSERT INTO app_users (username, password_hash) VALUES (?, ?)`, username, hash)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Handler creates the HTTP handler for UI and API routes.
 func (a *API) Handler(browserRoot string, staticRoot string) http.Handler {
 	indexPage, _ := Asset("static/index.html")
